@@ -67,10 +67,10 @@ def load_data_from_gcs(path):
         date_column_name_in_csv = None
         if 'Date' in df.columns: # Sesuai dengan file hasil_gabungan.csv yang diberikan
             date_column_name_in_csv = 'Date'
-        elif 'Last trading Date' in df.columns: # Fallback jika nama kolom berubah di masa depan
-            date_column_name_in_csv = 'Last trading Date'
+        elif 'Last Trading Date' in df.columns: # Fallback jika nama kolom berubah di masa depan
+            date_column_name_in_csv = 'Last Trading Date'
         else:
-            raise ValueError("Kolom tanggal ('Date' atau 'Last trading Date') tidak ditemukan di CSV.")
+            raise ValueError("Kolom tanggal ('Date' atau 'Last Trading Date') tidak ditemukan di CSV.")
 
         df[date_column_name_in_csv] = pd.to_datetime(df[date_column_name_in_csv], errors='coerce')
         df.dropna(subset=[date_column_name_in_csv], inplace=True) # Hapus baris dengan tanggal yang tidak valid
