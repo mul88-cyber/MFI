@@ -54,7 +54,7 @@ def load_data_from_gcs(path):
     try:
         df = pd.read_csv(path)
         # Menggunakan nama kolom yang baru sesuai info user
-        df['Last trading Date'] = pd.to_datetime(df['Last trading Date'])
+        df['Last Trading Date'] = pd.to_datetime(df['Last Trading Date'])
         df.rename(columns={'Last Trading Date': 'Date'}, inplace=True) # Ubah nama kolom untuk konsistensi
         df.set_index('Date', inplace=True)
         # Pastikan kolom numerik adalah numerik
