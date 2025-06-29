@@ -55,7 +55,7 @@ def load_data_from_gcs(path):
         df = pd.read_csv(path)
         # Menggunakan nama kolom yang baru sesuai info user
         df['Last trading Date'] = pd.to_datetime(df['Last trading Date'])
-        df.rename(columns={'Last trading Date': 'Date'}, inplace=True) # Ubah nama kolom untuk konsistensi
+        df.rename(columns={'Last Trading Date': 'Date'}, inplace=True) # Ubah nama kolom untuk konsistensi
         df.set_index('Date', inplace=True)
         # Pastikan kolom numerik adalah numerik
         numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Foreign_Buy', 'Foreign_Sell', 'Freq']
