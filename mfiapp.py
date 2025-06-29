@@ -7,7 +7,7 @@ import io # Untuk debugging df.info()
 # --- Fungsi untuk menghitung Money Flow Index (MFI) ---
 def calculate_mfi(df, period=14):
     # Pastikan kolom yang dibutuhkan ada sebelum perhitungan
-    required_ohlcv = ['Open', 'High', 'Low', 'Close', 'Volume']
+    required_ohlcv = ['Open Price', 'High', 'Low', 'Close', 'Volume']
     for col in required_ohlcv:
         if col not in df.columns:
             st.error(f"Error MFI Calc: Kolom '{col}' tidak ditemukan untuk perhitungan MFI.")
@@ -78,13 +78,13 @@ def load_data_from_gcs(path):
         df.set_index('Date', inplace=True)
         
         # --- Mengkonversi kolom OHLCV dan lainnya langsung tanpa rename map ---
-        # Berdasarkan inspeksi hasil_gabungan.csv, nama kolom sudah 'Open', 'High', dll.
-        # Jika ada 'Open Price', 'High Price' dll., Anda bisa tambahkan mapping lagi di sini:
-        # Example: if 'Open Price' in df.columns: df.rename(columns={'Open Price': 'Open'}, inplace=True)
+        # Berdasarkan inspeksi hasil_gabungan.csv, nama kolom sudah 'Open Price', 'High', dll.
+        # Jika ada 'Open Price Price', 'High Price' dll., Anda bisa tambahkan mapping lagi di sini:
+        # Example: if 'Open Price Price' in df.columns: df.rename(columns={'Open Price Price': 'Open Price'}, inplace=True)
 
         # Pastikan kolom numerik adalah numerik
         # Menggunakan nama kolom yang ditemukan di hasil_gabungan.csv yang Anda berikan
-        numeric_cols_to_convert = ['Open', 'High', 'Low', 'Close', 'Volume', 'Foreign_Buy', 'Foreign_Sell', 'Freq']
+        numeric_cols_to_convert = ['Open Price', 'High', 'Low', 'Close', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Frequencyuency']
         for col in numeric_cols_to_convert:
             if col in df.columns: 
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -93,7 +93,7 @@ def load_data_from_gcs(path):
                 st.warning(f"Kolom '{col}' tidak ditemukan di DataFrame. Perhitungan atau tampilan mungkin terpengaruh.") 
 
         # Drop baris yang memiliki NaN di kolom OHLC dan Volume setelah konversi
-        required_ohlcv_for_mfi = ['Open', 'High', 'Low', 'Close', 'Volume']
+        required_ohlcv_for_mfi = ['Open Price', 'High', 'Low', 'Close', 'Volume']
         df = df.dropna(subset=[col for col in required_ohlcv_for_mfi if col in df.columns])
 
         return df 
@@ -157,7 +157,7 @@ with tab1:
         if not df_filtered_date.empty:
             st.write(f"#### Grafik Harga & Money Flow Index (MFI) untuk {selected_stock}")
             
-            ohlc_cols = ['Open', 'High', 'Low', 'Close']
+            ohlc_cols = ['Open Price', 'High', 'Low', 'Close']
             available_ohlc_cols = [col for col in ohlc_cols if col in df_filtered_date.columns]
 
             if len(available_ohlc_cols) == 4 and 'Volume' in df_filtered_date.columns and 'MFI' in df_filtered_date.columns:
@@ -167,7 +167,7 @@ with tab1:
 
                 # Candlestick chart
                 fig.add_trace(go.Candlestick(x=df_filtered_date.index,
-                                            open=df_filtered_date['Open'],
+                                            Open Price=df_filtered_date['Open Price'],
                                             high=df_filtered_date['High'],
                                             low=df_filtered_date['Low'],
                                             close=df_filtered_date['Close'],
@@ -203,23 +203,23 @@ with tab1:
 
             # --- Tabel Data Detail ---
             st.write("#### Data Detail Harian")
-            columns_to_display_base = ['Open', 'High', 'Low', 'Close', 'Volume']
-            optional_cols_to_display = ['Foreign_Buy', 'Foreign_Sell', 'Freq', 'MFI']
+            columns_to_display_base = ['Open Price', 'High', 'Low', 'Close', 'Volume']
+            optional_cols_to_display = ['Foreign Buy', 'Foreign Sell', 'Frequencyuency', 'MFI']
 
             actual_columns_to_display = [col for col in columns_to_display_base if col in df_filtered_date.columns]
             actual_columns_to_display.extend([col for col in optional_cols_to_display if col in df_filtered_date.columns and col not in actual_columns_to_display])
 
             if actual_columns_to_display:
                 st.dataframe(df_filtered_date[actual_columns_to_display].style.format({
-                    'Open': "{:.2f}", 
+                    'Open Price': "{:.2f}", 
                     'High': "{:.2f}", 
                     'Low': "{:.2f}", 
                     'Close': "{:.2f}",
                     'MFI': "{:.2f}",
                     'Volume': "{:,}", 
-                    'Foreign_Buy': "{:,}",
-                    'Foreign_Sell': "{:,}",
-                    'Freq': "{:,}"
+                    'Foreign Buy': "{:,}",
+                    'Foreign Sell': "{:,}",
+                    'Frequencyuency': "{:,}"
                 }))
             else:
                 st.info("Tidak ada kolom yang valid untuk ditampilkan dalam tabel data detail.")
@@ -233,7 +233,7 @@ with tab2:
     st.header("🏆 Top Stock Picks (Berdasarkan Volume Harian Terbaru)")
 
     # Pengecekan ketat untuk kolom yang dibutuhkan di sini
-    required_top_pick_cols = ['Stock Code', 'Volume', 'Foreign_Buy', 'Foreign_Sell', 'Close']
+    required_top_pick_cols = ['Stock Code', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Close']
     if all(col in df_full.columns for col in required_top_pick_cols) and not df_full.empty:
         
         # Ambil tanggal terakhir yang tersedia di seluruh dataset
@@ -244,7 +244,7 @@ with tab2:
 
         if not df_latest_day.empty:
             # Hitung Net Foreign Flow
-            df_latest_day['Net_Foreign_Flow'] = df_latest_day['Foreign_Buy'] - df_latest_day['Foreign_Sell']
+            df_latest_day['Net_Foreign_Flow'] = df_latest_day['Foreign Buy'] - df_latest_day['Foreign Sell']
 
             # Urutkan berdasarkan Volume (atau metrik lain yang Anda inginkan)
             # dan ambil 25 teratas
@@ -252,11 +252,11 @@ with tab2:
 
             st.write(f"Data Top Picks per tanggal **{latest_date.strftime('%Y-%m-%d')}**")
             # Tampilkan dalam tabel
-            st.dataframe(top_25_stocks[['Stock Code', 'Close', 'Volume', 'Net_Foreign_Flow', 'Freq']].style.format({
+            st.dataframe(top_25_stocks[['Stock Code', 'Close', 'Volume', 'Net_Foreign_Flow', 'Frequencyuency']].style.format({
                 'Close': "{:.2f}",
                 'Volume': "{:,}",
                 'Net_Foreign_Flow': "{:,}",
-                'Freq': "{:,}"
+                'Frequencyuency': "{:,}"
             }))
         else:
             st.info("Tidak ada data untuk tanggal terbaru untuk menghitung Top Stock Picks.")
