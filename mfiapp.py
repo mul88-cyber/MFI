@@ -7,6 +7,7 @@ import io # Untuk debugging df.info()
 # --- Fungsi untuk menghitung Money Flow Index (MFI) ---
 def calculate_mfi(df, period=14):
     # Pastikan kolom yang dibutuhkan ada sebelum perhitungan
+    # Perhatikan: menggunakan 'Open Price' sesuai update terakhir Anda
     required_ohlcv = ['Open Price', 'High', 'Low', 'Close', 'Volume']
     for col in required_ohlcv:
         if col not in df.columns:
@@ -77,23 +78,17 @@ def load_data_from_gcs(path):
         df.rename(columns={date_column_name_in_csv: 'Date'}, inplace=True) # Ubah nama kolom menjadi 'Date'
         df.set_index('Date', inplace=True)
         
-        # --- Mengkonversi kolom OHLCV dan lainnya langsung tanpa rename map ---
-        # Berdasarkan inspeksi hasil_gabungan.csv, nama kolom sudah 'Open Price', 'High', dll.
-        # Jika ada 'Open Price Price', 'High Price' dll., Anda bisa tambahkan mapping lagi di sini:
-        # Example: if 'Open Price Price' in df.columns: df.rename(columns={'Open Price Price': 'Open Price'}, inplace=True)
-
-        # Pastikan kolom numerik adalah numerik
-        # Menggunakan nama kolom yang ditemukan di hasil_gabungan.csv yang Anda berikan
-        numeric_cols_to_convert = ['Open Price', 'High', 'Low', 'Close', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Frequencyuency']
+        # --- Mengkonversi kolom numerik ---
+        # Menggunakan nama kolom yang ada di CSV Anda sesuai info terakhir:
+        numeric_cols_to_convert = ['Open Price', 'High', 'Low', 'Close', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Freq'] # Perbaikan: 'Frequency' -> 'Freq'
         for col in numeric_cols_to_convert:
             if col in df.columns: 
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             else:
-                # Ini akan menangkap jika ada kolom numerik penting yang hilang
                 st.warning(f"Kolom '{col}' tidak ditemukan di DataFrame. Perhitungan atau tampilan mungkin terpengaruh.") 
 
         # Drop baris yang memiliki NaN di kolom OHLC dan Volume setelah konversi
-        required_ohlcv_for_mfi = ['Open Price', 'High', 'Low', 'Close', 'Volume']
+        required_ohlcv_for_mfi = ['Open Price', 'High', 'Low', 'Close', 'Volume'] # Menggunakan 'Open Price'
         df = df.dropna(subset=[col for col in required_ohlcv_for_mfi if col in df.columns])
 
         return df 
@@ -157,17 +152,21 @@ with tab1:
         if not df_filtered_date.empty:
             st.write(f"#### Grafik Harga & Money Flow Index (MFI) untuk {selected_stock}")
             
-            ohlc_cols = ['Open Price', 'High', 'Low', 'Close']
-            available_ohlc_cols = [col for col in ohlc_cols if col in df_filtered_date.columns]
+            # List kolom OHLC yang akan digunakan di Plotly
+            # Perhatikan: Nama kolom di DataFrame adalah 'Open Price', 'High', 'Low', 'Close'
+            # Tapi parameter di Plotly adalah 'open', 'high', 'low', 'close'
+            ohlc_cols_df = ['Open Price', 'High', 'Low', 'Close'] 
+            available_ohlc_cols = [col for col in ohlc_cols_df if col in df_filtered_date.columns]
 
             if len(available_ohlc_cols) == 4 and 'Volume' in df_filtered_date.columns and 'MFI' in df_filtered_date.columns:
                 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
                                     vertical_spacing=0.1, 
                                     row_heights=[0.7, 0.3])
 
-                # Candlestick chart
+                # Candlestick chart - KOREKSI DI SINI!
+                # Nama parameter Plotly adalah 'open', 'high', 'low', 'close'
                 fig.add_trace(go.Candlestick(x=df_filtered_date.index,
-                                            Open Price=df_filtered_date['Open Price'],
+                                            open=df_filtered_date['Open Price'], # Pastikan ini mengacu ke nama kolom di DF
                                             high=df_filtered_date['High'],
                                             low=df_filtered_date['Low'],
                                             close=df_filtered_date['Close'],
@@ -203,8 +202,9 @@ with tab1:
 
             # --- Tabel Data Detail ---
             st.write("#### Data Detail Harian")
+            # Menggunakan nama kolom yang ada di DataFrame
             columns_to_display_base = ['Open Price', 'High', 'Low', 'Close', 'Volume']
-            optional_cols_to_display = ['Foreign Buy', 'Foreign Sell', 'Frequencyuency', 'MFI']
+            optional_cols_to_display = ['Foreign Buy', 'Foreign Sell', 'Freq', 'MFI'] # Perbaikan: 'Frequency' -> 'Freq'
 
             actual_columns_to_display = [col for col in columns_to_display_base if col in df_filtered_date.columns]
             actual_columns_to_display.extend([col for col in optional_cols_to_display if col in df_filtered_date.columns and col not in actual_columns_to_display])
@@ -219,7 +219,7 @@ with tab1:
                     'Volume': "{:,}", 
                     'Foreign Buy': "{:,}",
                     'Foreign Sell': "{:,}",
-                    'Frequencyuency': "{:,}"
+                    'Freq': "{:,}" # Perbaikan: 'Frequency' -> 'Freq'
                 }))
             else:
                 st.info("Tidak ada kolom yang valid untuk ditampilkan dalam tabel data detail.")
@@ -233,7 +233,7 @@ with tab2:
     st.header("🏆 Top Stock Picks (Berdasarkan Volume Harian Terbaru)")
 
     # Pengecekan ketat untuk kolom yang dibutuhkan di sini
-    required_top_pick_cols = ['Stock Code', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Close']
+    required_top_pick_cols = ['Stock Code', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Close'] # Menggunakan 'Foreign Buy', 'Foreign Sell'
     if all(col in df_full.columns for col in required_top_pick_cols) and not df_full.empty:
         
         # Ambil tanggal terakhir yang tersedia di seluruh dataset
@@ -244,7 +244,7 @@ with tab2:
 
         if not df_latest_day.empty:
             # Hitung Net Foreign Flow
-            df_latest_day['Net_Foreign_Flow'] = df_latest_day['Foreign Buy'] - df_latest_day['Foreign Sell']
+            df_latest_day['Net_Foreign_Flow'] = df_latest_day['Foreign Buy'] - df_latest_day['Foreign Sell'] # Menggunakan 'Foreign Buy', 'Foreign Sell'
 
             # Urutkan berdasarkan Volume (atau metrik lain yang Anda inginkan)
             # dan ambil 25 teratas
@@ -252,11 +252,11 @@ with tab2:
 
             st.write(f"Data Top Picks per tanggal **{latest_date.strftime('%Y-%m-%d')}**")
             # Tampilkan dalam tabel
-            st.dataframe(top_25_stocks[['Stock Code', 'Close', 'Volume', 'Net_Foreign_Flow', 'Frequencyuency']].style.format({
+            st.dataframe(top_25_stocks[['Stock Code', 'Close', 'Volume', 'Net_Foreign_Flow', 'Freq']].style.format({ # Perbaikan: 'Frequency' -> 'Freq'
                 'Close': "{:.2f}",
                 'Volume': "{:,}",
                 'Net_Foreign_Flow': "{:,}",
-                'Frequencyuency': "{:,}"
+                'Freq': "{:,}" # Perbaikan: 'Frequency' -> 'Freq'
             }))
         else:
             st.info("Tidak ada data untuk tanggal terbaru untuk menghitung Top Stock Picks.")
@@ -265,4 +265,5 @@ with tab2:
             "Kolom penting untuk 'Top Stock Picks' tidak ditemukan di data Anda (misalnya 'Stock Code').\n\n"
             "**Untuk mengaktifkan fitur ini, pastikan file CSV Anda berisi data dari banyak saham dan memiliki kolom 'Stock Code' untuk identifikasi saham.**"
         )
+        # Menampilkan kolom yang diharapkan vs. yang ditemukan untuk debugging
         st.info("Kolom yang diharapkan: " + ", ".join(required_top_pick_cols) + ". Kolom yang ditemukan: " + ", ".join(df_full.columns.tolist()))
