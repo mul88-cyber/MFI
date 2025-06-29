@@ -80,7 +80,7 @@ def load_data_from_gcs(path):
         
         # --- Mengkonversi kolom numerik ---
         # Menggunakan nama kolom yang ada di CSV Anda sesuai info terakhir:
-        numeric_cols_to_convert = ['Open Price', 'High', 'Low', 'Close', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Freq'] # Perbaikan: 'Frequency' -> 'Freq'
+        numeric_cols_to_convert = ['Open Price', 'High', 'Low', 'Close', 'Volume', 'Foreign Buy', 'Foreign Sell', 'Frequency'] # Perbaikan: 'Frequency' -> 'Frequency'
         for col in numeric_cols_to_convert:
             if col in df.columns: 
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -204,7 +204,7 @@ with tab1:
             st.write("#### Data Detail Harian")
             # Menggunakan nama kolom yang ada di DataFrame
             columns_to_display_base = ['Open Price', 'High', 'Low', 'Close', 'Volume']
-            optional_cols_to_display = ['Foreign Buy', 'Foreign Sell', 'Freq', 'MFI'] # Perbaikan: 'Frequency' -> 'Freq'
+            optional_cols_to_display = ['Foreign Buy', 'Foreign Sell', 'Frequency', 'MFI'] # Perbaikan: 'Frequency' -> 'Frequency'
 
             actual_columns_to_display = [col for col in columns_to_display_base if col in df_filtered_date.columns]
             actual_columns_to_display.extend([col for col in optional_cols_to_display if col in df_filtered_date.columns and col not in actual_columns_to_display])
@@ -219,7 +219,7 @@ with tab1:
                     'Volume': "{:,}", 
                     'Foreign Buy': "{:,}",
                     'Foreign Sell': "{:,}",
-                    'Freq': "{:,}" # Perbaikan: 'Frequency' -> 'Freq'
+                    'Frequency': "{:,}" # Perbaikan: 'Frequency' -> 'Frequency'
                 }))
             else:
                 st.info("Tidak ada kolom yang valid untuk ditampilkan dalam tabel data detail.")
@@ -252,11 +252,11 @@ with tab2:
 
             st.write(f"Data Top Picks per tanggal **{latest_date.strftime('%Y-%m-%d')}**")
             # Tampilkan dalam tabel
-            st.dataframe(top_25_stocks[['Stock Code', 'Close', 'Volume', 'Net_Foreign_Flow', 'Freq']].style.format({ # Perbaikan: 'Frequency' -> 'Freq'
+            st.dataframe(top_25_stocks[['Stock Code', 'Close', 'Volume', 'Net_Foreign_Flow', 'Frequency']].style.format({ # Perbaikan: 'Frequency' -> 'Frequency'
                 'Close': "{:.2f}",
                 'Volume': "{:,}",
                 'Net_Foreign_Flow': "{:,}",
-                'Freq': "{:,}" # Perbaikan: 'Frequency' -> 'Freq'
+                'Frequency': "{:,}" # Perbaikan: 'Frequency' -> 'Frequency'
             }))
         else:
             st.info("Tidak ada data untuk tanggal terbaru untuk menghitung Top Stock Picks.")
