@@ -1,184 +1,142 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import numpy as np
-from google.oauth2 import service_account
-from gcsfs import GCSFileSystem
 from ta.volume import ChaikinMoneyFlowIndicator, MFIIndicator
+import numpy as np
 
-# Load GCS credentials from Streamlit secrets
-creds = service_account.Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"]
-)
+# Konfigurasi
+BUCKET_NAME = "stock-csvku"
+FILE_NAME = "hasil_gabungan_plus_netforeign.csv"  # File baru
+GCS_PATH = f"gs://{BUCKET_NAME}/{FILE_NAME}"
 
-@st.cache_data(ttl=3600)  # Cache 1 jam
+@st.cache_data(ttl=3600)
 def load_data():
-    fs = GCSFileSystem(project="stock-analysis-461503", token=creds)
-    with fs.open("stock-csvku/hasil_gabungan_ori.csv") as f:
-        return pd.read_csv(f)
+    # Pakai gcsfs jika ada secrets, atau akses langsung jika public
+    if 'gcp_service_account' in st.secrets:
+        from google.oauth2 import service_account
+        from gcsfs import GCSFileSystem
+        
+        creds = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"]
+        )
+        fs = GCSFileSystem(project="stock-analysis-461503", token=creds)
+        with fs.open(GCS_PATH) as f:
+            return pd.read_csv(f, parse_dates=['Last Trading Date'])
+    else:
+        return pd.read_csv(GCS_PATH, parse_dates=['Last Trading Date'])
 
-# Load data
-df = load_data()
-
-# Preprocessing
-df['Last Trading Date'] = pd.to_datetime(df['Last Trading Date'])
-df['Net Foreign'] = df['Foreign Buy'] - df['Foreign Sell']
-
-# Calculate indicators
-def calculate_indicators(group):
-    group = group.sort_values('Last Trading Date')
-    high, low, close, volume = group['High'], group['Low'], group['Close'], group['Volume']
+# Fungsi kalkulasi indikator untuk SATU SAHAM
+def calculate_indicators_for_stock(stock_df):
+    if len(stock_df) < 20:
+        stock_df['CMF'] = np.nan
+        stock_df['MFI'] = np.nan
+        return stock_df
     
-    # CMF
-    cmf = ChaikinMoneyFlowIndicator(high, low, close, volume, window=20)
-    group['CMF'] = cmf.chaikin_money_flow()
+    try:
+        # CMF
+        cmf_ind = ChaikinMoneyFlowIndicator(
+            high=stock_df['High'],
+            low=stock_df['Low'],
+            close=stock_df['Close'],
+            volume=stock_df['Volume'],
+            window=20
+        )
+        stock_df['CMF'] = cmf_ind.chaikin_money_flow()
+        
+        # MFI
+        mfi_ind = MFIIndicator(
+            high=stock_df['High'],
+            low=stock_df['Low'],
+            close=stock_df['Close'],
+            volume=stock_df['Volume'],
+            window=14
+        )
+        stock_df['MFI'] = mfi_ind.money_flow_index()
+    except:
+        stock_df['CMF'] = np.nan
+        stock_df['MFI'] = np.nan
     
-    # MFI
-    mfi = MFIIndicator(high, low, close, volume, window=14)
-    group['MFI'] = mfi.money_flow_index()
-    
-    return group
+    return stock_df
 
-df = df.groupby('Stock Code').apply(calculate_indicators)
+# UI
+st.set_page_config(layout="wide")
+st.title("📊 Dashboard Money Flow Saham Indonesia")
 
-# Streamlit UI
-st.set_page_config(
-    layout="wide", 
-    page_title="💰 IDX Money Flow Dashboard",
-    page_icon="📈"
-)
+# Load data (hanya kolom yang diperlukan)
+cols_to_load = [
+    'Stock Code', 'Company Name', 'Sector', 'Last Trading Date',
+    'Open Price', 'High', 'Low', 'Close', 'Volume', 'Net Foreign'
+]
 
-st.title("🔥 REAL-TIME SAHAM INDONESIA MONEY FLOW")
-st.write(f"Data Terakhir: {df['Last Trading Date'].max().strftime('%d %B %Y')}")
+try:
+    df = load_data()
+    # Pastikan kolom ada sebelum memfilter
+    available_cols = [col for col in cols_to_load if col in df.columns]
+    df = df[available_cols]
+except Exception as e:
+    st.error(f"Gagal memuat data: {str(e)}")
+    st.stop()
 
 # Sidebar
-st.sidebar.header("KONTROL ANALISIS")
+st.sidebar.header("Kontrol Analisis")
 selected_stock = st.sidebar.selectbox(
-    "PILIH KODE SAHAM", 
+    "Pilih Saham", 
     df['Stock Code'].unique(),
     index=0
 )
 
-selected_sector = st.sidebar.multiselect(
-    "FILTER SEKTOR", 
-    df['Sector'].unique(),
-    default=df['Sector'].unique()
-)
+# Filter data untuk saham yang dipilih
+stock_df = df[df['Stock Code'] == selected_stock].copy().sort_values('Last Trading Date')
 
-date_range = st.sidebar.date_input(
-    "RENTANG WAKTU",
-    value=[df['Last Trading Date'].min(), df['Last Trading Date'].max()],
-    min_value=df['Last Trading Date'].min(),
-    max_value=df['Last Trading Date'].max()
-)
+# Hitung indikator hanya untuk saham ini
+if len(stock_df) > 0:
+    stock_df = calculate_indicators_for_stock(stock_df)
 
-# Filter data
-filtered_df = df[
-    (df['Stock Code'] == selected_stock) &
-    (df['Sector'].isin(selected_sector)) &
-    (df['Last Trading Date'] >= pd.to_datetime(date_range[0])) &
-    (df['Last Trading Date'] <= pd.to_datetime(date_range[1]))
-]
-
-# Tabs
-tab1, tab2, tab3 = st.tabs(["CHART SAHAM", "MONEY FLOW", "ANALISIS SEKTOR"])
-
-with tab1:
-    st.header(f"PERGERAKAN HARGA: {selected_stock}")
-    fig_price = px.line(
-        filtered_df, 
-        x='Last Trading Date', 
-        y='Close',
-        color_discrete_sequence=['#00cc96']
-    )
-    st.plotly_chart(fig_price, use_container_width=True)
+# Tampilkan visualisasi
+if not stock_df.empty:
+    st.subheader(f"Performa Saham: {selected_stock}")
     
-    st.header("VOLUME PERDAGANGAN")
-    fig_vol = px.bar(
-        filtered_df, 
-        x='Last Trading Date', 
-        y='Volume',
-        color='Close',
-        color_continuous_scale='blues'
-    )
-    st.plotly_chart(fig_vol, use_container_width=True)
-
-with tab2:
-    col1, col2 = st.columns(2)
+    # Tab view
+    tab1, tab2, tab3 = st.tabs(["Harga & Volume", "Money Flow", "Net Foreign"])
     
-    with col1:
-        st.header("CHAINKIN MONEY FLOW (CMF)")
-        fig_cmf = px.area(
-            filtered_df, 
-            x='Last Trading Date', 
-            y='CMF',
-            color_discrete_sequence=['#ff7f0e']
-        )
-        fig_cmf.add_hline(y=0, line_dash="dash", line_color="red")
-        st.plotly_chart(fig_cmf, use_container_width=True)
+    with tab1:
+        fig1 = px.line(stock_df, x='Last Trading Date', y='Close', title="Perubahan Harga")
+        st.plotly_chart(fig1, use_container_width=True)
         
-    with col2:
-        st.header("MONEY FLOW INDEX (MFI)")
-        fig_mfi = px.line(
-            filtered_df, 
-            x='Last Trading Date', 
-            y='MFI',
-            color_discrete_sequence=['#1f77b4']
-        )
-        fig_mfi.add_hrect(y0=0, y1=20, fillcolor="green", opacity=0.2)
-        fig_mfi.add_hrect(y0=80, y1=100, fillcolor="red", opacity=0.2)
-        st.plotly_chart(fig_mfi, use_container_width=True)
+        fig2 = px.bar(stock_df, x='Last Trading Date', y='Volume', title="Volume Perdagangan")
+        st.plotly_chart(fig2, use_container_width=True)
     
-    st.header("NET FOREIGN FLOW")
-    fig_foreign = px.bar(
-        filtered_df, 
-        x='Last Trading Date', 
-        y='Net Foreign',
-        color='Net Foreign',
-        color_continuous_scale='RdYlGn'
-    )
-    st.plotly_chart(fig_foreign, use_container_width=True)
-
-with tab3:
-    st.header("PERBANDINGAN SEKTOR")
+    with tab2:
+        if 'CMF' in stock_df.columns:
+            fig3 = px.line(stock_df, x='Last Trading Date', y='CMF', title="Chaikin Money Flow (CMF)")
+            fig3.add_hline(y=0, line_dash="dash", line_color="red")
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.warning("Kolom CMF tidak tersedia")
+            
+        if 'MFI' in stock_df.columns:
+            fig4 = px.line(stock_df, x='Last Trading Date', y='MFI', title="Money Flow Index (MFI)")
+            fig4.add_hline(y=20, line_dash="dash", line_color="green")
+            fig4.add_hline(y=80, line_dash="dash", line_color="red")
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.warning("Kolom MFI tidak tersedia")
     
-    sector_df = df[df['Sector'].isin(selected_sector)]
-    sector_summary = sector_df.groupby('Sector').agg(
-        Avg_CMF=('CMF', 'mean'),
-        Total_Net_Foreign=('Net Foreign', 'sum')
-    ).reset_index()
+    with tab3:
+        if 'Net Foreign' in stock_df.columns:
+            fig5 = px.bar(stock_df, x='Last Trading Date', y='Net Foreign', 
+                         color='Net Foreign', color_continuous_scale='RdYlGn',
+                         title="Net Foreign Flow")
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.warning("Kolom Net Foreign tidak tersedia")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("RATA-RATA CMF")
-        fig_sector_cmf = px.bar(
-            sector_summary,
-            x='Sector',
-            y='Avg_CMF',
-            color='Avg_CMF',
-            color_continuous_scale='tealrose'
-        )
-        st.plotly_chart(fig_sector_cmf, use_container_width=True)
-        
-    with col2:
-        st.subheader("ALIRAN ASING NET")
-        fig_sector_foreign = px.treemap(
-            sector_summary,
-            path=['Sector'],
-            values='Total_Net_Foreign',
-            color='Total_Net_Foreign',
-            color_continuous_scale='RdYlGn'
-        )
-        st.plotly_chart(fig_sector_foreign, use_container_width=True)
-
-# Data preview
-st.header("DATA HISTORIS")
-st.dataframe(
-    filtered_df.sort_values('Last Trading Date', ascending=False),
-    height=300,
-    hide_index=True
-)
+    # Tampilkan data
+    st.subheader("Data Historis")
+    st.dataframe(stock_df.sort_values('Last Trading Date', ascending=False))
+else:
+    st.warning(f"Tidak ditemukan data untuk saham {selected_stock}")
 
 # Footer
-st.caption("© 2025 IDX Money Flow Dashboard | Dibuat dengan Streamlit")
+st.caption("© 2025 Analisis Saham Indonesia | Data terakhir: " + 
+          pd.Timestamp.now().strftime("%Y-%m-%d"))
